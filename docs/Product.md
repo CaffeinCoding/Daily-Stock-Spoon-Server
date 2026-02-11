@@ -1,0 +1,164 @@
+# Daily Stock Spoon - Product 요구사항 문서
+
+## 프로젝트 개요
+
+Daily Stock Spoon 서비스에서 사용하는 유틸리티 REST API 서버.
+한국투자증권(KIS) API와 Google Custom Search API를 활용하여 국내 주식 관련 데이터를 수집·가공·제공한다.
+
+## 기능 명세
+
+### 1. getStockChart - 주식 차트 데이터 조회
+
+| 항목       | 설명                                                                           |
+| ---------- | ------------------------------------------------------------------------------ |
+| 엔드포인트 | `POST /api/chart`                                                              |
+| 입력       | `stockCode` (종목코드), `startDate` (시작일), `endDate` (종료일, default 당일) |
+| 출력       | 종목별 OHLCV 차트 데이터 (수정주가 반영)                                       |
+| 사용 API   | KIS 국내주식기간별시세, KIS 주식당일분봉조회                                   |
+
+**요청 Body:**
+
+```json
+{
+    "stockCode": "005930",
+    "startDate": "20240101",
+    "endDate": "20240131"
+}
+```
+
+**응답:**
+
+```json
+{
+    "stockCode": "005930",
+    "chart": [
+        {
+            "date": "20240131",
+            "open": 74000,
+            "high": 74500,
+            "low": 73500,
+            "close": 74200,
+            "volume": 12345678
+        }
+    ],
+    "startDate": "20240101",
+    "endDate": "20240131"
+}
+```
+
+---
+
+### 2. getForeignInstitutionTop10 - 외국인/기관 매매 상위 종목
+
+| 항목       | 설명                                                                 |
+| ---------- | -------------------------------------------------------------------- |
+| 엔드포인트 | `GET /api/fitop`                                                     |
+| 입력       | 없음                                                                 |
+| 출력       | 외국인/기관 순매수/순매도 상위 10개 종목                             |
+| 사용 API   | KIS 국내기관\_외국인 매매종목가집계, KIS 종목별 투자자매매동향(일별) |
+
+**비즈니스 로직:**
+
+- **장마감 전 (15:30 이전)**
+    - `국내기관_외국인 매매종목가집계` API만 활용
+    - 순매수 상위 10개 + 순매도 상위 10개 수집
+
+- **장마감 후 (15:30 이후)**
+    - `국내기관_외국인 매매종목가집계`로 상위 종목 수집
+    - 수집된 종목에 대해 `종목별 투자자매매동향(일별)` API로 실제 매매량 보정
+    - 보정된 데이터 정리 후 반환
+
+**응답:**
+
+```json
+{
+    "buyTop": [
+        { "stockCode": "005930", "stockName": "삼성전자", "volume": 500000 }
+    ],
+    "sellTop": [
+        { "stockCode": "000660", "stockName": "SK하이닉스", "volume": 300000 }
+    ],
+    "date": "20240131"
+}
+```
+
+---
+
+### 3. getStockNews - 종목 뉴스 조회
+
+| 항목       | 설명                                                   |
+| ---------- | ------------------------------------------------------ |
+| 엔드포인트 | `POST /api/news`                                       |
+| 입력       | `stockCode` (종목코드), `len` (기간: `1d`, `1w`, `1m`) |
+| 출력       | 종목 관련 최신 뉴스 목록                               |
+| 사용 API   | Google Custom Search API                               |
+
+**요청 Body:**
+
+```json
+{
+    "stockCode": "005930",
+    "len": "1w"
+}
+```
+
+**응답:**
+
+```json
+{
+    "stockCode": "005930",
+    "stockName": "삼성전자",
+    "news": [
+        {
+            "title": "삼성전자, AI 반도체 투자 확대",
+            "url": "https://example.com/news/1",
+            "date": "2024-01-30",
+            "snippet": "삼성전자가 AI 반도체 생산라인..."
+        }
+    ]
+}
+```
+
+---
+
+### 4. getNewsFromUrl - URL 뉴스 크롤링
+
+| 항목       | 설명                             |
+| ---------- | -------------------------------- |
+| 엔드포인트 | `POST /api/news-from-url`        |
+| 입력       | `url` (뉴스 URL)                 |
+| 출력       | 크롤링된 뉴스 본문 데이터        |
+| 기술       | `@mozilla/readability` + `jsdom` |
+
+**요청 Body:**
+
+```json
+{
+    "url": "https://example.com/news/article/123"
+}
+```
+
+**응답:**
+
+```json
+{
+    "title": "삼성전자, AI 반도체 투자 확대",
+    "url": "https://example.com/news/article/123",
+    "date": "2024-01-30",
+    "content": "삼성전자가 AI 반도체 생산라인 투자를 확대한다고 밝혔다..."
+}
+```
+
+## 환경변수
+
+| 변수명                  | 설명                                 |
+| ----------------------- | ------------------------------------ |
+| `KIS_APPKEY`            | 한국투자증권 API 앱 키               |
+| `KIS_APPSECRET`         | 한국투자증권 API 앱 시크릿           |
+| `GOOGLE_SEARCH_ID`      | Google Programmable Search Engine ID |
+| `GOOGLE_SEARCH_API_KEY` | Google Custom Search API 키          |
+
+## 참고사항
+
+- KIS API 접근토큰: 유효기간 24시간, 갱신주기 6시간
+- 모든 주가는 **수정주가**가 반영된 상태

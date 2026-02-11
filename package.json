@@ -1,0 +1,31 @@
+{
+    "name": "daily-stock-spoon",
+    "version": "1.0.0",
+    "description": "Daily Stock Spoon 서비스 유틸리티 서버",
+    "type": "module",
+    "scripts": {
+        "dev": "tsx watch src/index.ts",
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "@hono/node-server": "^1.13.7",
+        "@hono/swagger-ui": "^0.5.3",
+        "@hono/zod-openapi": "^1.2.1",
+        "@mozilla/readability": "^0.5.0",
+        "axios": "^1.7.9",
+        "dotenv": "^16.4.7",
+        "hono": "^4.6.0",
+        "jsdom": "^25.0.1",
+        "zod": "^4.3.6"
+    },
+    "devDependencies": {
+        "@types/jsdom": "^21.1.7",
+        "@types/node": "^22.10.0",
+        "tsx": "^4.19.0",
+        "typescript": "^5.7.0",
+        "vitest": "^2.1.0"
+    }
+}
