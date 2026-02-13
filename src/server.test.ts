@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import axios from "axios";
+import { extract } from "@extractus/article-extractor";
 
 // ── vi.hoisted로 mock 함수 선언 ────────────
 
@@ -7,12 +8,12 @@ const {
     mockGetDailyChart,
     mockGetForeignInstitutionTotal,
     mockGetInvestorTradeDaily,
-    mockSearch,
+    mockNewsSearch,
 } = vi.hoisted(() => ({
     mockGetDailyChart: vi.fn(),
     mockGetForeignInstitutionTotal: vi.fn(),
     mockGetInvestorTradeDaily: vi.fn(),
-    mockSearch: vi.fn(),
+    mockNewsSearch: vi.fn(),
 }));
 
 // ── 모든 외부 의존성 mock ─────────────────
@@ -26,10 +27,15 @@ vi.mock("./api/kis/index.js", () => ({
     })),
 }));
 
-vi.mock("./api/google/index.js", () => ({
-    GoogleSearchClient: vi.fn().mockImplementation(() => ({
-        search: mockSearch,
+vi.mock("./api/googleNews/index.js", () => ({
+    GoogleNewsClient: vi.fn().mockImplementation(() => ({
+        search: mockNewsSearch,
     })),
+}));
+
+// resolveGoogleNewsUrl mock (URL 그대로 반환)
+vi.mock("./utils/resolveGoogleNewsUrl.js", () => ({
+    resolveGoogleNewsUrl: vi.fn((url: string) => Promise.resolve(url)),
 }));
 
 vi.mock("axios", () => ({
@@ -37,6 +43,10 @@ vi.mock("axios", () => ({
         get: vi.fn(),
         create: vi.fn(() => ({ get: vi.fn(), post: vi.fn() })),
     },
+}));
+
+vi.mock("@extractus/article-extractor", () => ({
+    extract: vi.fn(),
 }));
 
 vi.mock("dotenv", () => ({
@@ -135,15 +145,14 @@ describe("API Server Routes", () => {
 
     describe("POST /api/news", () => {
         it("종목 뉴스를 반환해야 한다", async () => {
-            mockSearch.mockResolvedValueOnce({
-                items: [
-                    {
-                        title: "삼성전자 뉴스",
-                        link: "https://example.com/1",
-                        snippet: "삼성전자...",
-                    },
-                ],
-            });
+            mockNewsSearch.mockResolvedValueOnce([
+                {
+                    title: "삼성전자 뉴스",
+                    url: "https://example.com/1",
+                    pubDate: "2024-01-30",
+                    source: "매경",
+                },
+            ]);
 
             const res = await app.request("/api/news", {
                 method: "POST",
@@ -174,23 +183,11 @@ describe("API Server Routes", () => {
 
     describe("POST /api/news-from-url", () => {
         it("URL에서 뉴스를 크롤링해야 한다", async () => {
-            const mockHtml = `
-        <html>
-          <head>
-            <meta property="article:published_time" content="2024-01-30T09:00:00+09:00">
-            <title>테스트 뉴스</title>
-          </head>
-          <body>
-            <article>
-              <h1>테스트 뉴스</h1>
-              <p>테스트 뉴스 본문입니다. 매우 중요한 경제 뉴스로 삼성전자 관련 내용을 담고 있습니다.</p>
-            </article>
-          </body>
-        </html>
-      `;
-
-            (axios.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-                data: mockHtml,
+            (extract as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+                title: "테스트 뉴스",
+                content:
+                    "<p>테스트 뉴스 본문입니다. 매우 중요한 경제 뉴스로 삼성전자 관련 내용을 담고 있습니다.</p>",
+                published: "2024-01-30T09:00:00+09:00",
             });
 
             const res = await app.request("/api/news-from-url", {

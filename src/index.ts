@@ -5,7 +5,7 @@ import { cors } from "hono/cors";
 import dotenv from "dotenv";
 
 import { KisApiClient } from "./api/kis/index.js";
-import { GoogleSearchClient } from "./api/google/index.js";
+import { GoogleNewsClient } from "./api/googleNews/index.js";
 import { getStockChart } from "./utils/getStockChart.js";
 import { getForeignInstitutionTop10 } from "./utils/getForeignInstitutionTop10.js";
 import { getStockNews } from "./utils/getStockNews.js";
@@ -20,10 +20,7 @@ const kisClient = new KisApiClient(
     process.env.KIS_APPSECRET || "",
 );
 
-const googleClient = new GoogleSearchClient(
-    process.env.GOOGLE_SEARCH_API_KEY || "",
-    process.env.GOOGLE_SEARCH_ID || "",
-);
+const newsClient = new GoogleNewsClient();
 
 // ── Zod 스키마 정의 ─────────────────────────
 
@@ -36,13 +33,10 @@ const ChartRequestSchema = z
         startDate: z
             .string()
             .openapi({ example: "20240101", description: "시작일 (YYYYMMDD)" }),
-        endDate: z
-            .string()
-            .optional()
-            .openapi({
-                example: "20240131",
-                description: "종료일 (YYYYMMDD, 기본: 당일)",
-            }),
+        endDate: z.string().optional().openapi({
+            example: "20240131",
+            description: "종료일 (YYYYMMDD, 기본: 당일)",
+        }),
     })
     .openapi("ChartRequest");
 
@@ -89,13 +83,10 @@ const NewsRequestSchema = z
         stockCode: z
             .string()
             .openapi({ example: "005930", description: "종목코드" }),
-        stockName: z
-            .string()
-            .optional()
-            .openapi({
-                example: "삼성전자",
-                description: "종목명 (검색 키워드)",
-            }),
+        stockName: z.string().optional().openapi({
+            example: "삼성전자",
+            description: "종목명 (검색 키워드)",
+        }),
         len: z
             .string()
             .optional()
@@ -125,13 +116,10 @@ const NewsResponseSchema = z
 // News from URL
 const NewsFromUrlRequestSchema = z
     .object({
-        url: z
-            .string()
-            .url()
-            .openapi({
-                example: "https://example.com/news/article/123",
-                description: "뉴스 URL",
-            }),
+        url: z.string().url().openapi({
+            example: "https://example.com/news/article/123",
+            description: "뉴스 URL",
+        }),
     })
     .openapi("NewsFromUrlRequest");
 
@@ -142,11 +130,9 @@ const NewsFromUrlResponseSchema = z
             .string()
             .openapi({ example: "https://example.com/news/article/123" }),
         date: z.string().openapi({ example: "2024-01-30" }),
-        content: z
-            .string()
-            .openapi({
-                example: "삼성전자가 AI 반도체 생산라인 투자를 확대한다고...",
-            }),
+        content: z.string().openapi({
+            example: "삼성전자가 AI 반도체 생산라인 투자를 확대한다고...",
+        }),
     })
     .openapi("NewsFromUrlResponse");
 
@@ -207,7 +193,7 @@ const newsRoute = createRoute({
     tags: ["News"],
     summary: "종목 뉴스 조회",
     description:
-        "Google Custom Search를 활용해 종목 관련 최신 뉴스를 검색합니다.",
+        "Google News RSS 피드를 활용해 종목 관련 최신 뉴스를 검색합니다. 중복 뉴스는 제목 유사도 기반으로 자동 제거됩니다.",
     request: {
         body: {
             content: { "application/json": { schema: NewsRequestSchema } },
@@ -300,7 +286,7 @@ app.openapi(newsRoute, async (c) => {
     }
 
     const result = await getStockNews(
-        googleClient,
+        newsClient,
         body.stockCode,
         body.stockName || body.stockCode,
         body.len || "1d",

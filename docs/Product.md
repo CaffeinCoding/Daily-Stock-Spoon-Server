@@ -3,7 +3,7 @@
 ## 프로젝트 개요
 
 Daily Stock Spoon 서비스에서 사용하는 유틸리티 REST API 서버.
-한국투자증권(KIS) API와 Google Custom Search API를 활용하여 국내 주식 관련 데이터를 수집·가공·제공한다.
+한국투자증권(KIS) API와 Google News RSS 피드를 활용하여 국내 주식 관련 데이터를 수집·가공·제공한다.
 
 ## 기능 명세
 
@@ -90,8 +90,8 @@ Daily Stock Spoon 서비스에서 사용하는 유틸리티 REST API 서버.
 | ---------- | ------------------------------------------------------ |
 | 엔드포인트 | `POST /api/news`                                       |
 | 입력       | `stockCode` (종목코드), `len` (기간: `1d`, `1w`, `1m`) |
-| 출력       | 종목 관련 최신 뉴스 목록                               |
-| 사용 API   | Google Custom Search API                               |
+| 출력       | 종목 관련 최신 뉴스 목록 (중복 제거 적용)              |
+| 사용 API   | Google News RSS 피드                                   |
 
 **요청 Body:**
 
@@ -123,12 +123,12 @@ Daily Stock Spoon 서비스에서 사용하는 유틸리티 REST API 서버.
 
 ### 4. getNewsFromUrl - URL 뉴스 크롤링
 
-| 항목       | 설명                             |
-| ---------- | -------------------------------- |
-| 엔드포인트 | `POST /api/news-from-url`        |
-| 입력       | `url` (뉴스 URL)                 |
-| 출력       | 크롤링된 뉴스 본문 데이터        |
-| 기술       | `@mozilla/readability` + `jsdom` |
+| 항목       | 설명                           |
+| ---------- | ------------------------------ |
+| 엔드포인트 | `POST /api/news-from-url`      |
+| 입력       | `url` (뉴스 URL)               |
+| 출력       | 크롤링된 뉴스 본문 데이터      |
+| 기술       | `@extractus/article-extractor` |
 
 **요청 Body:**
 
@@ -151,12 +151,10 @@ Daily Stock Spoon 서비스에서 사용하는 유틸리티 REST API 서버.
 
 ## 환경변수
 
-| 변수명                  | 설명                                 |
-| ----------------------- | ------------------------------------ |
-| `KIS_APPKEY`            | 한국투자증권 API 앱 키               |
-| `KIS_APPSECRET`         | 한국투자증권 API 앱 시크릿           |
-| `GOOGLE_SEARCH_ID`      | Google Programmable Search Engine ID |
-| `GOOGLE_SEARCH_API_KEY` | Google Custom Search API 키          |
+| 변수명          | 설명                       |
+| --------------- | -------------------------- |
+| `KIS_APPKEY`    | 한국투자증권 API 앱 키     |
+| `KIS_APPSECRET` | 한국투자증권 API 앱 시크릿 |
 
 ## 참고사항
 

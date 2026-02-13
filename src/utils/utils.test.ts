@@ -1,12 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ── getStockChart 테스트 ──────────────────
+// ── mock 함수 선언 (vi.hoisted) ────────────
+
+const {
+    mockGetDailyChart,
+    mockGetForeignInstitutionTotal,
+    mockGetInvestorTradeDaily,
+    mockNewsSearch,
+    mockResolveUrl,
+    mockExtract,
+} = vi.hoisted(() => ({
+    mockGetDailyChart: vi.fn(),
+    mockGetForeignInstitutionTotal: vi.fn(),
+    mockGetInvestorTradeDaily: vi.fn(),
+    mockNewsSearch: vi.fn(),
+    mockResolveUrl: vi.fn((url: string) => Promise.resolve(url)),
+    mockExtract: vi.fn(),
+}));
 
 // KIS API 클라이언트 mock
-const mockGetDailyChart = vi.fn();
-const mockGetForeignInstitutionTotal = vi.fn();
-const mockGetInvestorTradeDaily = vi.fn();
-
 vi.mock("../api/kis/index.js", () => ({
     KisApiClient: vi.fn().mockImplementation(() => ({
         getDailyChart: mockGetDailyChart,
@@ -15,29 +27,33 @@ vi.mock("../api/kis/index.js", () => ({
     })),
 }));
 
-// Google Search 클라이언트 mock
-const mockSearch = vi.fn();
-vi.mock("../api/google/index.js", () => ({
-    GoogleSearchClient: vi.fn().mockImplementation(() => ({
-        search: mockSearch,
+// Google News 클라이언트 mock
+vi.mock("../api/googleNews/index.js", () => ({
+    GoogleNewsClient: vi.fn().mockImplementation(() => ({
+        search: mockNewsSearch,
     })),
 }));
 
-// axios mock (for getNewsFromUrl)
-vi.mock("axios", () => ({
-    default: {
-        get: vi.fn(),
-        create: vi.fn(() => ({ get: vi.fn(), post: vi.fn() })),
-    },
+// resolveGoogleNewsUrl mock
+vi.mock("./resolveGoogleNewsUrl.js", () => ({
+    resolveGoogleNewsUrl: mockResolveUrl,
+}));
+
+// @extractus/article-extractor mock
+vi.mock("@extractus/article-extractor", () => ({
+    extract: mockExtract,
 }));
 
 import { KisApiClient } from "../api/kis/index.js";
-import { GoogleSearchClient } from "../api/google/index.js";
+import { GoogleNewsClient } from "../api/googleNews/index.js";
 import { getStockChart } from "./getStockChart.js";
 import { getForeignInstitutionTop10 } from "./getForeignInstitutionTop10.js";
-import { getStockNews } from "./getStockNews.js";
+import {
+    getStockNews,
+    diceCoefficient,
+    removeDuplicateNews,
+} from "./getStockNews.js";
 import { getNewsFromUrl } from "./getNewsFromUrl.js";
-import axios from "axios";
 
 describe("getStockChart", () => {
     let kisClient: KisApiClient;
@@ -79,10 +95,8 @@ describe("getStockChart", () => {
 
         expect(result.stockCode).toBe("005930");
         expect(result.chart).toHaveLength(2);
-        // 날짜순 정렬 확인
         expect(result.chart[0].date).toBe("20240130");
         expect(result.chart[1].date).toBe("20240131");
-        // 숫자 변환 확인
         expect(result.chart[1].open).toBe(74000);
         expect(result.chart[1].close).toBe(74200);
         expect(result.chart[1].volume).toBe(12345678);
@@ -113,7 +127,6 @@ describe("getForeignInstitutionTop10", () => {
     });
 
     it("순매수/순매도 상위 종목을 반환해야 한다", async () => {
-        // 순매수 상위
         mockGetForeignInstitutionTotal.mockResolvedValueOnce({
             rt_cd: "0",
             output: [
@@ -130,7 +143,6 @@ describe("getForeignInstitutionTop10", () => {
             ],
         });
 
-        // 순매도 상위
         mockGetForeignInstitutionTotal.mockResolvedValueOnce({
             rt_cd: "0",
             output: [
@@ -153,39 +165,31 @@ describe("getForeignInstitutionTop10", () => {
 });
 
 describe("getStockNews", () => {
-    let googleClient: GoogleSearchClient;
+    let newsClient: GoogleNewsClient;
 
     beforeEach(() => {
         vi.clearAllMocks();
-        googleClient = new GoogleSearchClient("key", "id");
+        newsClient = new GoogleNewsClient();
     });
 
     it("뉴스 검색 결과를 반환해야 한다", async () => {
-        mockSearch.mockResolvedValueOnce({
-            items: [
-                {
-                    title: "삼성전자 AI 투자",
-                    link: "https://example.com/1",
-                    snippet: "삼성전자가...",
-                    pagemap: {
-                        metatags: [
-                            {
-                                "article:published_time":
-                                    "2024-01-30T09:00:00+09:00",
-                            },
-                        ],
-                    },
-                },
-                {
-                    title: "반도체 동향",
-                    link: "https://example.com/2",
-                    snippet: "반도체 업계...",
-                },
-            ],
-        });
+        mockNewsSearch.mockResolvedValueOnce([
+            {
+                title: "삼성전자 AI 투자",
+                url: "https://example.com/1",
+                pubDate: "2024-01-30",
+                source: "매경",
+            },
+            {
+                title: "반도체 동향",
+                url: "https://example.com/2",
+                pubDate: "2024-01-29",
+                source: "한경",
+            },
+        ]);
 
         const result = await getStockNews(
-            googleClient,
+            newsClient,
             "005930",
             "삼성전자",
             "1w",
@@ -196,29 +200,77 @@ describe("getStockNews", () => {
         expect(result.news).toHaveLength(2);
         expect(result.news[0].title).toBe("삼성전자 AI 투자");
         expect(result.news[0].date).toBe("2024-01-30");
-        expect(result.news[1].date).toBe(""); // 메타태그 없는 경우
+    });
+
+    it("중복 뉴스를 제거해야 한다", async () => {
+        mockNewsSearch.mockResolvedValueOnce([
+            {
+                title: "삼성전자 AI 반도체 투자 확대 발표",
+                url: "https://a.com/1",
+                pubDate: "2024-01-30",
+                source: "매경",
+            },
+            {
+                title: "삼성전자 AI 반도체 투자 확대",
+                url: "https://b.com/2",
+                pubDate: "2024-01-30",
+                source: "한경",
+            },
+            {
+                title: "SK하이닉스 HBM 수출 호조",
+                url: "https://c.com/3",
+                pubDate: "2024-01-30",
+                source: "조선",
+            },
+        ]);
+
+        const result = await getStockNews(
+            newsClient,
+            "005930",
+            "삼성전자",
+            "1d",
+        );
+
+        // 유사도 >= 0.6인 두 번째 뉴스가 제거되어야 함
+        expect(result.news).toHaveLength(2);
+        expect(result.news[0].title).toBe("삼성전자 AI 반도체 투자 확대 발표");
+        expect(result.news[1].title).toBe("SK하이닉스 HBM 수출 호조");
+    });
+});
+
+describe("diceCoefficient", () => {
+    it("동일한 문자열은 유사도 1이어야 한다", () => {
+        expect(diceCoefficient("삼성전자", "삼성전자")).toBe(1);
+    });
+
+    it("완전히 다른 문자열은 유사도 0이어야 한다", () => {
+        expect(diceCoefficient("abc", "xyz")).toBe(0);
+    });
+
+    it("유사한 제목은 높은 유사도를 가져야 한다", () => {
+        const sim = diceCoefficient(
+            "삼성전자 AI 반도체 투자 확대 발표",
+            "삼성전자 AI 반도체 투자 확대",
+        );
+        expect(sim).toBeGreaterThanOrEqual(0.6);
+    });
+
+    it("다른 주제의 제목은 낮은 유사도를 가져야 한다", () => {
+        const sim = diceCoefficient(
+            "삼성전자 AI 투자",
+            "SK하이닉스 HBM 수출 호조",
+        );
+        expect(sim).toBeLessThan(0.6);
     });
 });
 
 describe("getNewsFromUrl", () => {
     it("URL에서 뉴스 콘텐츠를 추출해야 한다", async () => {
-        const mockHtml = `
-      <html>
-        <head>
-          <meta property="article:published_time" content="2024-01-30T09:00:00+09:00">
-          <title>테스트 뉴스 제목</title>
-        </head>
-        <body>
-          <article>
-            <h1>테스트 뉴스 제목</h1>
-            <p>이것은 테스트 뉴스의 본문입니다. 삼성전자가 AI 반도체 생산라인 투자를 확대한다고 밝혔다. 이에 따라 주가가 상승세를 보이고 있다.</p>
-          </article>
-        </body>
-      </html>
-    `;
-
-        (axios.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-            data: mockHtml,
+        mockExtract.mockResolvedValueOnce({
+            title: "테스트 뉴스 제목",
+            content:
+                "<p>이것은 테스트 뉴스의 본문입니다. 삼성전자가 AI 반도체 생산라인 투자를 확대한다고 밝혔다.</p>",
+            published: "2024-01-30T09:00:00+09:00",
         });
 
         const result = await getNewsFromUrl("https://example.com/news/1");
@@ -226,5 +278,16 @@ describe("getNewsFromUrl", () => {
         expect(result.url).toBe("https://example.com/news/1");
         expect(result.date).toBe("2024-01-30");
         expect(result.content).toContain("삼성전자");
+        expect(result.content).not.toContain("<p>");
+    });
+
+    it("extract가 null을 반환하면 빈 결과를 반환해야 한다", async () => {
+        mockExtract.mockResolvedValueOnce(null);
+
+        const result = await getNewsFromUrl("https://example.com/invalid");
+
+        expect(result.url).toBe("https://example.com/invalid");
+        expect(result.title).toBe("");
+        expect(result.content).toBe("");
     });
 });

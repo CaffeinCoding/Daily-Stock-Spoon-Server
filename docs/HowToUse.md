@@ -13,12 +13,7 @@
 1. [한국투자증권 개발자센터](https://apiportal.koreainvestment.com/) 회원가입
 2. API 서비스 신청 → **앱 키(APPKEY)**, **앱 시크릿(APPSECRET)** 발급
 3. 접근토큰은 서버가 자동으로 발급/캐싱 처리 (유효기간 24시간, 갱신 6시간)
-
-#### Google Custom Search
-
-1. [Google Cloud Console](https://console.cloud.google.com/)에서 프로젝트 생성
-2. **Custom Search API** 활성화 → **API 키** 발급
-3. [Programmable Search Engine](https://programmablesearchengine.google.com/) 생성 → **검색 엔진 ID** 확인
+4. 403 에러 발생 시 자동으로 토큰 재발급 및 1회 재시도
 
 ### 3. 환경변수 설정
 
@@ -31,9 +26,9 @@ cp .env.example .env
 ```env
 KIS_APPKEY=발급받은_앱키
 KIS_APPSECRET=발급받은_앱시크릿
-GOOGLE_SEARCH_ID=검색엔진_ID
-GOOGLE_SEARCH_API_KEY=구글_API_키
 ```
+
+> **참고**: Google Custom Search API 키는 더 이상 필요하지 않습니다. 뉴스 검색은 Google News RSS 피드를 사용합니다.
 
 ---
 
@@ -142,7 +137,7 @@ curl http://localhost:3000/api/fitop
 
 ### 3. 종목 뉴스 조회 — `POST /api/news`
 
-종목 관련 최신 뉴스를 검색합니다.
+종목 관련 최신 뉴스를 검색합니다. Google News RSS 피드를 활용하며, 중복 뉴스는 자동 제거됩니다.
 
 ```bash
 curl -X POST http://localhost:3000/api/news \
@@ -164,7 +159,7 @@ curl -X POST http://localhost:3000/api/news \
 
 ### 4. URL 뉴스 크롤링 — `POST /api/news-from-url`
 
-URL에서 뉴스 본문을 추출합니다.
+URL에서 뉴스 본문을 추출합니다. `@extractus/article-extractor`를 사용하여 정확한 기사 본문을 추출합니다.
 
 ```bash
 curl -X POST http://localhost:3000/api/news-from-url \
@@ -189,7 +184,7 @@ curl -X POST http://localhost:3000/api/news-from-url \
 
 자세한 아키텍처 및 API 문서는 `docs/` 디렉토리를 참고하세요:
 
-- [Product.md](./docs/Product.md) — 제품 요구사항
-- [Architecture.md](./docs/Architecture.md) — 시스템 아키텍처
-- KIS API 문서 — `docs/kis/`
-- [Google Custom Search API](./docs/google-custom-search.md)
+- [Product.md](./Product.md) — 제품 요구사항
+- [Architecture.md](./Architecture.md) — 시스템 아키텍처
+- KIS API 문서 — `kis/`
+- [Google Custom Search API](./google-custom-search.md) — (레거시)

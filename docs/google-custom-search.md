@@ -1,4 +1,6 @@
-# Google Custom Search API - cse.list
+# Google Custom Search API - cse.list (레거시)
+
+> **⚠️ 참고**: 현재 뉴스 검색은 Google News RSS 피드(`api/googleNews`)를 사용합니다. 이 문서는 참고용으로 유지됩니다.
 
 ## 기본 정보
 

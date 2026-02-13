@@ -161,3 +161,20 @@ export interface KisInvestorTradeResponse {
     msg1: string;
     output: KisInvestorTradeItem[];
 }
+
+// ──────────────────────────────────────────
+// 에러
+// ──────────────────────────────────────────
+
+/** KIS API 에러 */
+export class KisApiError extends Error {
+    public readonly status: number;
+    public readonly endpoint: string;
+
+    constructor(status: number, message: string, endpoint: string) {
+        super(`KIS API 오류 [${status}] ${endpoint}: ${message}`);
+        this.name = "KisApiError";
+        this.status = status;
+        this.endpoint = endpoint;
+    }
+}

@@ -259,4 +259,77 @@ describe("KisApiClient", () => {
             expect(result.output[0].orgn_ntby_qty).toBe("50000");
         });
     });
+
+    describe("에러 처리", () => {
+        it("403 발생 시 토큰 재발급 후 재시도해야 한다", async () => {
+            // 첫 번째 토큰 발급
+            mockAxiosInstance.post.mockResolvedValueOnce(mockTokenResponse);
+            // 첫 번째 API 호출 → 403
+            mockAxiosInstance.get.mockRejectedValueOnce({
+                response: { status: 403 },
+                message: "Forbidden",
+            });
+            // 재발급 토큰
+            mockAxiosInstance.post.mockResolvedValueOnce({
+                data: { ...mockTokenResponse.data, access_token: "new-token" },
+            });
+            // 재시도 API 호출 → 성공
+            mockAxiosInstance.get.mockResolvedValueOnce(mockDailyChartResponse);
+
+            const result = await client.getDailyChart({
+                stockCode: "005930",
+                startDate: "20240101",
+                endDate: "20240131",
+            });
+
+            expect(result.rt_cd).toBe("0");
+            // post 2회 (토큰 발급 × 2), get 2회 (실패 + 재시도)
+            expect(mockAxiosInstance.post).toHaveBeenCalledTimes(2);
+            expect(mockAxiosInstance.get).toHaveBeenCalledTimes(2);
+        });
+
+        it("403 재시도 후에도 실패하면 KisApiError를 던져야 한다", async () => {
+            mockAxiosInstance.post.mockResolvedValue(mockTokenResponse);
+            // 두 번 모두 403
+            mockAxiosInstance.get.mockRejectedValue({
+                response: { status: 403 },
+                message: "Forbidden",
+            });
+
+            await expect(
+                client.getDailyChart({
+                    stockCode: "005930",
+                    startDate: "20240101",
+                    endDate: "20240131",
+                }),
+            ).rejects.toThrow("KIS API 오류 [403]");
+        });
+
+        it("500 에러 시 KisApiError를 던져야 한다", async () => {
+            mockAxiosInstance.post.mockResolvedValueOnce(mockTokenResponse);
+            mockAxiosInstance.get.mockRejectedValueOnce({
+                response: { status: 500 },
+                message: "Internal Server Error",
+            });
+
+            await expect(
+                client.getDailyChart({
+                    stockCode: "005930",
+                    startDate: "20240101",
+                    endDate: "20240131",
+                }),
+            ).rejects.toThrow("KIS 서버 내부 오류가 발생했습니다");
+        });
+
+        it("토큰 발급 실패 시 KisApiError를 던져야 한다", async () => {
+            mockAxiosInstance.post.mockRejectedValueOnce({
+                response: { status: 401 },
+                message: "Unauthorized",
+            });
+
+            await expect(client.getAccessToken()).rejects.toThrow(
+                "토큰 발급 실패",
+            );
+        });
+    });
 });

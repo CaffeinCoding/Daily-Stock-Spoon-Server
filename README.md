@@ -6,8 +6,6 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
 
 - KIS_APPKEY
 - KIS_APPSECRET
-- GOOGLE_SEARCH_ID
-- GOOGLE_SEARCH_API_KEY
 
 ## Features
 
@@ -38,14 +36,15 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
     - --len: 뉴스 기간 (당일 기준, 1d, 1w, 1m)
     - output: 주식 종목의 최신 뉴스 데이터 (json object)
     - api
-        - google custom search api query parameter [링크](https://developers.google.com/custom-search/v1/reference/rest/v1/cse/list)
+        - Google News RSS 피드 (cheerio로 파싱)
     - logic
-        - getForeignInstitutionTop10 api를 활용해 기관과 외국인 순매수 상위 종목 10개와 순매도 상위 종목 10개를 수집
-        - google custom search api와 getNewsFromUrl api를 활용해 각 종목의 최신 뉴스 데이터를 수집
-        - 수집한 뉴스 데이터를 정리하여 return
+        - Google News RSS 피드를 활용하여 종목명으로 뉴스 검색
+        - resolveGoogleNewsUrl로 Google News 리다이렉트 URL을 원본 URL로 변환
+        - bigram Dice coefficient 기반 중복 뉴스 제거 (유사도 ≥ 0.6)
 - getNewsFromUrl: url을 이용해 뉴스 데이터를 크롤링 및 해당 데이터를 return
     - input: url
     - output: 뉴스 데이터 (json object)
+    - 기술: `@extractus/article-extractor`
 
 ## Tech Stack
 
@@ -53,16 +52,16 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
 - typescript
 - Hono + @hono/zod-openapi + @hono/swagger-ui
 - axios
+- cheerio
+- @extractus/article-extractor
 - zod
-- @mozilla/readability
-- jsdom
 - dotenv
 - vitest
 
 ### API
 
 - KIS(한국투자증권) api
-- Google Custom Search api
+- Google News RSS
 
 ## Directory Structure
 
@@ -71,18 +70,23 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
 ├── src
 │   ├── api
 │   │   ├── kis
-│   │   │   ├── index.ts          # KIS API 클라이언트
-│   │   │   ├── types.ts          # KIS 타입 정의
+│   │   │   ├── index.ts          # KIS API 클라이언트 (토큰 자동 발급/재시도)
+│   │   │   ├── types.ts          # KIS 타입 정의 (KisApiError 포함)
 │   │   │   └── kis.test.ts
-│   │   └── google
-│   │       ├── index.ts          # Google Search 클라이언트
-│   │       ├── types.ts          # Google 타입 정의
-│   │       └── google.test.ts
+│   │   ├── google
+│   │   │   ├── index.ts          # Google Custom Search 클라이언트 (레거시)
+│   │   │   ├── types.ts          # Google 타입 정의
+│   │   │   └── google.test.ts
+│   │   └── googleNews
+│   │       ├── index.ts          # Google News RSS 클라이언트
+│   │       └── googleNews.test.ts
 │   ├── utils
 │   │   ├── getStockChart.ts
 │   │   ├── getForeignInstitutionTop10.ts
-│   │   ├── getStockNews.ts
-│   │   ├── getNewsFromUrl.ts
+│   │   ├── getStockNews.ts       # 뉴스 조회 + 중복 제거
+│   │   ├── getNewsFromUrl.ts     # URL 뉴스 본문 추출
+│   │   ├── resolveGoogleNewsUrl.ts   # Google News 리다이렉트 URL 해결
+│   │   ├── resolveGoogleNewsUrl.test.ts
 │   │   └── utils.test.ts
 │   ├── index.ts                  # Hono + OpenAPI + Swagger UI 서버
 │   └── server.test.ts
@@ -91,6 +95,7 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
 │   ├── Architecture.md
 │   ├── HowToUse.md
 │   ├── google-custom-search.md
+│   ├── dev/                      # 개발 이슈/계획 문서
 │   └── kis/                      # KIS API 문서 4개
 ├── .env
 ├── .env.example
@@ -194,7 +199,7 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
 
 - [Product.md](./docs/Product.md) — 제품 요구사항
 - [Architecture.md](./docs/Architecture.md) — 시스템 아키텍처
-- [Google Custom Search API](./docs/google-custom-search.md)
+- [Google Custom Search API](./docs/google-custom-search.md) — (레거시, 현재 Google News RSS 사용)
 - KIS API 문서 — `docs/kis/`
 
 ## 참고사항
@@ -204,4 +209,5 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
     - [발급폐기](https://apiportal.koreainvestment.com/apiservice-apiservice?/oauth2/revokeP)
     - 유효기간: 24시간
     - 갱신주기: 6시간
+    - 403 에러 시 자동 토큰 재발급 및 1회 재시도
 - 모든 주가는 수정주가가 반영된 상태
