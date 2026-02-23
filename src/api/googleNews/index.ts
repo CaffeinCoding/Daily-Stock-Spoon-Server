@@ -7,6 +7,10 @@ export interface GoogleNewsParams {
     query: string;
     /** 기간 (1d, 7d, 30d 등 Google News when: 형식) */
     when?: string;
+    /** 특정 날짜 이후 (YYYY-MM-DD) */
+    after?: string;
+    /** 특정 날짜 이전 (YYYY-MM-DD) */
+    before?: string;
 }
 
 /** Google News RSS 결과 아이템 */
@@ -40,6 +44,12 @@ export class GoogleNewsClient {
         const queryParts = [params.query];
         if (params.when) {
             queryParts.push(`when:${params.when}`);
+        }
+        if (params.after) {
+            queryParts.push(`after:${params.after}`);
+        }
+        if (params.before) {
+            queryParts.push(`before:${params.before}`);
         }
 
         const url = `${GOOGLE_NEWS_RSS_BASE}?q=${encodeURIComponent(queryParts.join(" "))}&hl=ko&gl=KR&ceid=KR:ko`;

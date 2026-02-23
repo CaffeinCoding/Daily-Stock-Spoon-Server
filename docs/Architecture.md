@@ -62,6 +62,9 @@ daily-stock-spoon/
 │   ├── index.ts                 # Hono 서버 엔트리포인트
 │   └── server.test.ts
 ├── docs/                        # 협업 문서
+├── Dockerfile                   # Multi-stage 프로덕션 빌드 (Node.js 22 Alpine)
+├── docker-compose.yml           # Docker Compose 설정
+├── .dockerignore
 ├── .env                         # 환경변수 (git 제외)
 ├── .env.example                 # 환경변수 템플릿
 ├── package.json
@@ -85,13 +88,13 @@ daily-stock-spoon/
 
 비즈니스 로직 담당. API 계층을 조합하여 서비스 요구사항 구현.
 
-| 모듈                         | 의존 API / 라이브러리                                |
-| ---------------------------- | ---------------------------------------------------- |
-| `getStockChart`              | KIS (기간별시세)                                     |
-| `getForeignInstitutionTop10` | KIS (외국인/기관 집계 + 투자자매매동향)              |
-| `getStockNews`               | Google News RSS + `resolveGoogleNewsUrl` + 중복 제거 |
-| `getNewsFromUrl`             | `@extractus/article-extractor`                       |
-| `resolveGoogleNewsUrl`       | Google News batchexecute API (리다이렉트 URL 해결)   |
+| 모듈                         | 의존 API / 라이브러리                                                            |
+| ---------------------------- | -------------------------------------------------------------------------------- |
+| `getStockChart`              | KIS (기간별시세)                                                                 |
+| `getForeignInstitutionTop10` | KIS (외국인/기관 집계 + 투자자매매동향)                                          |
+| `getStockNews`               | Google News RSS + `resolveGoogleNewsUrl` + 일별 뉴스 조합 및 중복 제거(최대 5개) |
+| `getNewsFromUrl`             | `@extractus/article-extractor`                                                   |
+| `resolveGoogleNewsUrl`       | Google News batchexecute API (리다이렉트 URL 해결)                               |
 
 ### 3. 서버 계층 (`src/index.ts`)
 
@@ -135,12 +138,14 @@ sequenceDiagram
 sequenceDiagram
     Client->>Hono: POST /api/news {stockCode, stockName, len}
     Hono->>getStockNews: 종목코드, 종목명, 기간
-    getStockNews->>GoogleNewsClient: RSS 피드 검색
-    GoogleNewsClient-->>getStockNews: 뉴스 아이템 리스트 (리다이렉트 URL)
-    getStockNews->>resolveGoogleNewsUrl: URL 변환 (batchexecute)
-    resolveGoogleNewsUrl-->>getStockNews: 원본 뉴스 URL
-    getStockNews->>getStockNews: 중복 제거 (Dice coefficient ≥ 0.6)
-    getStockNews-->>Hono: 뉴스 데이터
+    loop 각 일자마다 반복
+        getStockNews->>GoogleNewsClient: 순차적으로 RSS 피드 검색 (rate limit 방지 위해 1초 대기)
+        GoogleNewsClient-->>getStockNews: 일자별 뉴스 아이템 리스트 (리다이렉트 URL)
+        getStockNews->>resolveGoogleNewsUrl: URL 병렬 변환 (batchexecute)
+        resolveGoogleNewsUrl-->>getStockNews: 원본 뉴스 URL 확정
+        getStockNews->>getStockNews: 일자별 중복 제거 (Dice coefficient ≥ 0.6) 및 최대 5개 추출
+    end
+    getStockNews-->>Hono: 일자별 뉴스가 결합된 최종 데이터
     Hono-->>Client: JSON Response
 ```
 
@@ -156,4 +161,5 @@ sequenceDiagram
 | 뉴스 파싱   | @extractus/article-extractor | URL→기사 본문 추출                |
 | URL 변환    | resolveGoogleNewsUrl         | Google News 리다이렉트 → 원본 URL |
 | 환경변수    | dotenv                       | .env 파일 로드                    |
+| 컨테이너    | Docker                       | 프로덕션 배포 (multi-stage build) |
 | 테스트      | vitest                       | 단위/통합 테스트                  |

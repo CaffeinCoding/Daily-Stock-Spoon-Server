@@ -173,20 +173,22 @@ describe("getStockNews", () => {
     });
 
     it("뉴스 검색 결과를 반환해야 한다", async () => {
-        mockNewsSearch.mockResolvedValueOnce([
-            {
-                title: "삼성전자 AI 투자",
-                url: "https://example.com/1",
-                pubDate: "2024-01-30",
-                source: "매경",
-            },
-            {
-                title: "반도체 동향",
-                url: "https://example.com/2",
-                pubDate: "2024-01-29",
-                source: "한경",
-            },
-        ]);
+        mockNewsSearch
+            .mockResolvedValueOnce([
+                {
+                    title: "삼성전자 AI 투자",
+                    url: "https://example.com/1",
+                    pubDate: "2024-01-30",
+                    source: "매경",
+                },
+                {
+                    title: "반도체 동향",
+                    url: "https://example.com/2",
+                    pubDate: "2024-01-29",
+                    source: "한경",
+                },
+            ])
+            .mockResolvedValue([]);
 
         const result = await getStockNews(
             newsClient,
@@ -203,26 +205,28 @@ describe("getStockNews", () => {
     });
 
     it("중복 뉴스를 제거해야 한다", async () => {
-        mockNewsSearch.mockResolvedValueOnce([
-            {
-                title: "삼성전자 AI 반도체 투자 확대 발표",
-                url: "https://a.com/1",
-                pubDate: "2024-01-30",
-                source: "매경",
-            },
-            {
-                title: "삼성전자 AI 반도체 투자 확대",
-                url: "https://b.com/2",
-                pubDate: "2024-01-30",
-                source: "한경",
-            },
-            {
-                title: "SK하이닉스 HBM 수출 호조",
-                url: "https://c.com/3",
-                pubDate: "2024-01-30",
-                source: "조선",
-            },
-        ]);
+        mockNewsSearch
+            .mockResolvedValueOnce([
+                {
+                    title: "삼성전자 AI 반도체 투자 확대 발표",
+                    url: "https://a.com/1",
+                    pubDate: "2024-01-30",
+                    source: "매경",
+                },
+                {
+                    title: "삼성전자 AI 반도체 투자 확대",
+                    url: "https://b.com/2",
+                    pubDate: "2024-01-30",
+                    source: "한경",
+                },
+                {
+                    title: "SK하이닉스 HBM 수출 호조",
+                    url: "https://c.com/3",
+                    pubDate: "2024-01-30",
+                    source: "조선",
+                },
+            ])
+            .mockResolvedValue([]);
 
         const result = await getStockNews(
             newsClient,

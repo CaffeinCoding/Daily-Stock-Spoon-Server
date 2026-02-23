@@ -316,9 +316,7 @@ app.doc("/doc", {
         description:
             "Daily Stock Spoon 유틸리티 서버 API. 주식 차트, 외국인/기관 매매 동향, 종목 뉴스 조회 기능을 제공합니다.",
     },
-    servers: [
-        { url: "http://localhost:3000", description: "Local dev server" },
-    ],
+    servers: [{ url: "/", description: "Current server" }],
 });
 
 app.get("/swagger", swaggerUI({ url: "/doc" }));

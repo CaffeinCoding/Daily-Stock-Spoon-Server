@@ -24,6 +24,10 @@ cp .env.example .env
 ```
 
 ```env
+# 서버 포트 (기본 3000)
+PORT=3000
+
+# 한국투자증권 API
 KIS_APPKEY=발급받은_앱키
 KIS_APPSECRET=발급받은_앱시크릿
 ```
@@ -33,6 +37,8 @@ KIS_APPSECRET=발급받은_앱시크릿
 ---
 
 ## 설치 및 실행
+
+### 로컬 실행
 
 ```bash
 # 의존성 설치
@@ -49,9 +55,22 @@ npm start
 npm test
 ```
 
+### Docker 실행
+
+```bash
+# .env 파일 설정 후 실행
+docker compose up -d
+
+# 커스텀 포트로 실행
+PORT=8080 docker compose up -d
+
+# 종료
+docker compose down
+```
+
 서버 실행 후:
 
-- **API 서버**: `http://localhost:3000`
+- **API 서버**: `http://localhost:3000` (PORT 환경변수로 변경 가능)
 - **Swagger UI**: `http://localhost:3000/swagger` — 브라우저에서 API를 인터랙티브하게 테스트
 - **OpenAPI JSON**: `http://localhost:3000/doc` — OpenAPI 3.0 스펙 문서
 
@@ -137,7 +156,7 @@ curl http://localhost:3000/api/fitop
 
 ### 3. 종목 뉴스 조회 — `POST /api/news`
 
-종목 관련 최신 뉴스를 검색합니다. Google News RSS 피드를 활용하며, 중복 뉴스는 자동 제거됩니다.
+종목 관련 최신 뉴스를 검색합니다. Google News RSS 피드를 활용하며, 설정한 기간 내의 데이터를 일(day) 단위로 나누어 검색/취합하고 중복 뉴스는 자동 제거(일 최대 5개)되어 반환됩니다.
 
 ```bash
 curl -X POST http://localhost:3000/api/news \

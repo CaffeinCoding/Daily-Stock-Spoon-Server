@@ -2,8 +2,9 @@
 
 Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
 
-## Enviroment
+## Environment
 
+- PORT (기본 3000)
 - KIS_APPKEY
 - KIS_APPSECRET
 
@@ -38,9 +39,10 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
     - api
         - Google News RSS 피드 (cheerio로 파싱)
     - logic
-        - Google News RSS 피드를 활용하여 종목명으로 뉴스 검색
+        - len 파라미터(1d, 1w, 1m)를 기반으로 날짜(day)별로 구간을 나누어 Google News RSS 피드를 통해 뉴스 검색
         - resolveGoogleNewsUrl로 Google News 리다이렉트 URL을 원본 URL로 변환
-        - bigram Dice coefficient 기반 중복 뉴스 제거 (유사도 ≥ 0.6)
+        - 각 일자별로 최대 50개의 뉴스를 확인 후 bigram Dice coefficient 기반 중복 뉴스 제거 (유사도 ≥ 0.6)
+        - 일별로 중복이 제거된 기사 중 최대 5개의 뉴스를 선별하여 전체 목록 반환
 - getNewsFromUrl: url을 이용해 뉴스 데이터를 크롤링 및 해당 데이터를 return
     - input: url
     - output: 뉴스 데이터 (json object)
@@ -57,6 +59,7 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
 - zod
 - dotenv
 - vitest
+- Docker
 
 ### API
 
@@ -97,6 +100,9 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
 │   ├── google-custom-search.md
 │   ├── dev/                      # 개발 이슈/계획 문서
 │   └── kis/                      # KIS API 문서 4개
+├── Dockerfile                    # Multi-stage 프로덕션 빌드
+├── docker-compose.yml            # Docker Compose 설정
+├── .dockerignore
 ├── .env
 ├── .env.example
 ├── .gitignore
@@ -187,6 +193,16 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
 ## 사용방법
 
 👉 **[HowToUse.md](./docs/HowToUse.md)** — 설치, 환경변수 설정, API 사용법 (curl 예시 포함)
+
+### Docker로 실행
+
+```bash
+# .env 파일 설정 후 실행
+docker compose up -d
+
+# 커스텀 포트로 실행
+PORT=8080 docker compose up -d
+```
 
 ### Swagger UI
 

@@ -145,14 +145,16 @@ describe("API Server Routes", () => {
 
     describe("POST /api/news", () => {
         it("종목 뉴스를 반환해야 한다", async () => {
-            mockNewsSearch.mockResolvedValueOnce([
-                {
-                    title: "삼성전자 뉴스",
-                    url: "https://example.com/1",
-                    pubDate: "2024-01-30",
-                    source: "매경",
-                },
-            ]);
+            mockNewsSearch
+                .mockResolvedValueOnce([
+                    {
+                        title: "삼성전자 뉴스",
+                        url: "https://example.com/1",
+                        pubDate: "2024-01-30",
+                        source: "매경",
+                    },
+                ])
+                .mockResolvedValue([]);
 
             const res = await app.request("/api/news", {
                 method: "POST",

@@ -19,19 +19,48 @@ export interface StockNewsResult {
     news: NewsItem[];
 }
 
-/** len 파라미터를 Google News when: 형식으로 변환 */
-function convertLenToWhen(len: string): string {
-    switch (len) {
-        case "1d":
-            return "1d";
-        case "1w":
-            return "7d";
-        case "1m":
-            return "30d";
-        default:
-            return "1d";
+/** len 파라미터를 기반으로 검색할 날짜(오늘 포함) 범위 배열 반환 */
+function getDateRangesForLen(len: string): { after: string; before: string }[] {
+    const ranges: { after: string; before: string }[] = [];
+    let days = 1;
+    if (len === "1d") days = 1;
+    else if (len === "1w") days = 7;
+    else if (len === "1m") days = 30;
+    else days = 1;
+
+    // 한국 시간(KST) 대략적 기준.
+    const now = new Date();
+    const utc = now.getTime() + now.getTimezoneOffset() * 60 * 1000;
+    const kst = new Date(utc + 9 * 60 * 60 * 1000);
+
+    for (let i = 0; i < days; i++) {
+        const afterDate = new Date(kst);
+        afterDate.setDate(afterDate.getDate() - i);
+
+        const beforeDate = new Date(kst);
+        beforeDate.setDate(beforeDate.getDate() - i + 1);
+
+        const formatYMD = (d: Date) => {
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            return `${yyyy}-${mm}-${dd}`;
+        };
+
+        ranges.push({
+            after: formatYMD(afterDate),
+            before: formatYMD(beforeDate),
+        });
     }
+
+    return ranges;
 }
+
+/** 일정 밀리초 대기 */
+const delay = (ms: number) => {
+    if (process.env.NODE_ENV === "test") return Promise.resolve();
+    return new Promise((resolve) => setTimeout(resolve, ms));
+};
 
 // ── 중복 뉴스 제거 (bigram Dice coefficient) ──
 
@@ -90,37 +119,53 @@ export async function getStockNews(
     stockName: string,
     len: string = "1d",
 ): Promise<StockNewsResult> {
-    const when = convertLenToWhen(len);
+    const dateRanges = getDateRangesForLen(len);
+    const allNews: NewsItem[] = [];
 
-    const items = await newsClient.search({
-        query: `${stockName} 주식`,
-        when,
-    });
+    for (const range of dateRanges) {
+        const items = await newsClient.search({
+            query: `${stockName} 주식`,
+            after: range.after,
+            before: range.before,
+        });
 
-    // 리다이렉트 URL을 원본 URL로 병렬 변환
-    const resolvedItems = await Promise.allSettled(
-        items.map(async (item: GoogleNewsItem) => {
-            const resolvedUrl = await resolveGoogleNewsUrl(item.url);
-            return {
-                title: item.title,
-                url: resolvedUrl,
-                date: item.pubDate,
-                snippet: `${item.source} - ${item.title}`,
-            } as NewsItem;
-        }),
-    );
+        // 1일 최대 50개 제한
+        const dailyItems = items.slice(0, 50);
 
-    const news: NewsItem[] = resolvedItems
-        .filter(
-            (r): r is PromiseFulfilledResult<NewsItem> =>
-                r.status === "fulfilled",
-        )
-        .map((r) => r.value);
+        // 리다이렉트 URL을 원본 URL로 병렬 변환
+        const resolvedItems = await Promise.allSettled(
+            dailyItems.map(async (item: GoogleNewsItem) => {
+                const resolvedUrl = await resolveGoogleNewsUrl(item.url);
+                return {
+                    title: item.title,
+                    url: resolvedUrl,
+                    date: item.pubDate,
+                    snippet: `${item.source} - ${item.title}`,
+                } as NewsItem;
+            }),
+        );
+
+        const validNews: NewsItem[] = resolvedItems
+            .filter(
+                (r): r is PromiseFulfilledResult<NewsItem> =>
+                    r.status === "fulfilled",
+            )
+            .map((r) => r.value);
+
+        // 일별 중복 제거 처리 및 앞부분에서 5개 추출
+        const uniqueDailyNews = removeDuplicateNews(validNews).slice(0, 5);
+        allNews.push(...uniqueDailyNews);
+
+        // 구글 뉴스 API Rate Limit 방지를 위해 순차 처리 시 약간의 딜레이
+        if (range !== dateRanges[dateRanges.length - 1]) {
+            await delay(1000);
+        }
+    }
 
     return {
         stockCode,
         stockName,
-        news: removeDuplicateNews(news),
+        news: allNews,
     };
 }
 
