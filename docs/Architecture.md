@@ -9,29 +9,29 @@
 │                                                      │
 │  POST /api/chart ──── getStockChart()                │
 │  GET  /api/fitop ──── getForeignInstitutionTop10()   │
+│  GET  /api/fitop-db ─ (Force Update DB)              │
 │  POST /api/news  ──── getStockNews()                 │
 │  POST /api/news-from-url ── getNewsFromUrl()         │
 └──────────────┬───────────────────┬───────────────────┘
                │                   │
         ┌──────┴──────┐     ┌──────┴──────┐
-        │  utils/     │     │  utils/     │
-        │ 비즈니스     │     │ 크롤링      │
-        │ 로직 계층    │     │ 계층        │
+        │  utils/     │     │  db/        │
+        │ 비즈니스     │     │ SQLite DB   │
+        │ 로직 계층    │     │ (node:sqlite)│
         └──────┬──────┘     └──────┬──────┘
                │                   │
-     ┌─────────┴─────────┐        │
-     │                   │        │
-┌────┴────┐     ┌────────┴──┐  ┌──┴──────────────────┐
-│ KIS API │     │Google News│  │ article-extractor   │
-│ Client  │     │RSS Client │  │ (@extractus)        │
-│(api/kis)│     │(api/gNews)│  │                     │
-└────┬────┘     └────┬──────┘  └─────────────────────┘
-     │               │
-     ▼               ▼
-┌─────────┐   ┌──────────────────┐
-│ KIS     │   │ Google News      │
-│ OpenAPI │   │ RSS Feed         │
-└─────────┘   └──────────────────┘
+      ┌────────┴────────┐          │ DB (fitop.db)
+      │      크롤링     │          │
+┌─────┴─────┐     ┌─────┴──────────┴────┐
+│ KIS API   │     │Google News/article │
+│ Client    │     │extraction          │
+└─────┬─────┘     └────────────────────┘
+      │
+      ▼
+┌───────────┐
+│ KIS       │
+│ OpenAPI   │
+└───────────┘
 ```
 
 ## 디렉토리 구조
@@ -51,6 +51,8 @@ daily-stock-spoon/
 │   │   └── googleNews/
 │   │       ├── index.ts         # Google News RSS 클라이언트 (cheerio 파싱)
 │   │       └── googleNews.test.ts
+│   ├── db/
+│   │   └── sqlite.ts            # Node.js 22 내장 모듈 기반 SQLite DB 로직
 │   ├── utils/
 │   │   ├── getStockChart.ts     # 주식 차트 데이터 조회
 │   │   ├── getForeignInstitutionTop10.ts  # 외국인/기관 TOP10
@@ -116,20 +118,28 @@ sequenceDiagram
     Hono-->>Client: JSON Response
 ```
 
-### 외국인/기관 TOP10 (`GET /api/fitop`)
+### 외국인/기관 TOP10 (`GET /api/fitop` & `GET /api/fitop-db`)
 
 ```mermaid
 sequenceDiagram
     Client->>Hono: GET /api/fitop
     Hono->>getForeignInstitutionTop10: 호출
     getForeignInstitutionTop10->>KIS API: 외국인/기관 매매종목가집계
-    KIS API-->>getForeignInstitutionTop10: 상위 종목 리스트
-    alt 장마감 후
-        getForeignInstitutionTop10->>KIS API: 종목별 투자자매매동향 (종목별)
-        KIS API-->>getForeignInstitutionTop10: 실제 매매량
+    KIS API-->>getForeignInstitutionTop10: 상위 종목 리스트 (성공/오류)
+    alt 성공 시
+        alt 장마감 후
+            getForeignInstitutionTop10->>KIS API: 종목별 투자자매매동향
+            KIS API-->>getForeignInstitutionTop10: 실제 매매량 보정
+        end
+        getForeignInstitutionTop10-->>Hono: 최신 데이터
+        Hono->>SQLite DB: saveFiTop() 저장
+        Hono-->>Client: JSON Response
+    else 오류 발생 또는 데이터 부족 시
+        getForeignInstitutionTop10-->>Hono: Exception
+        Hono->>SQLite DB: getLatestFiTop() 캐시 데이터 조회
+        SQLite DB-->>Hono: 저장된 최신 데이터 반환
+        Hono-->>Client: 캐시된 JSON Response
     end
-    getForeignInstitutionTop10-->>Hono: TOP10 데이터
-    Hono-->>Client: JSON Response
 ```
 
 ### 종목 뉴스 조회 (`POST /api/news`)

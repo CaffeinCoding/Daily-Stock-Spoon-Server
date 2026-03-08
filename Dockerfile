@@ -16,6 +16,7 @@ WORKDIR /app
 
 # 보안: non-root 사용자
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN mkdir -p /app/db && chown -R appuser:appgroup /app/db
 
 # 프로덕션 의존성만 설치
 COPY package.json package-lock.json* ./

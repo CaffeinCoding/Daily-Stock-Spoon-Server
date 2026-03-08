@@ -4,11 +4,11 @@
     "description": "Daily Stock Spoon 서비스 유틸리티 서버",
     "type": "module",
     "scripts": {
-        "dev": "tsx watch src/index.ts",
+        "dev": "tsx watch --experimental-sqlite src/index.ts",
         "build": "tsc",
-        "start": "node dist/index.js",
-        "test": "vitest run",
-        "test:watch": "vitest"
+        "start": "node --experimental-sqlite dist/index.js",
+        "test": "node --experimental-sqlite ./node_modules/vitest/vitest.mjs run",
+        "test:watch": "node --experimental-sqlite ./node_modules/vitest/vitest.mjs"
     },
     "dependencies": {
         "@extractus/article-extractor": "^8.0.20",

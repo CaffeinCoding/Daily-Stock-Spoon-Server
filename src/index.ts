@@ -10,6 +10,7 @@ import { getStockChart } from "./utils/getStockChart.js";
 import { getForeignInstitutionTop10 } from "./utils/getForeignInstitutionTop10.js";
 import { getStockNews } from "./utils/getStockNews.js";
 import { getNewsFromUrl } from "./utils/getNewsFromUrl.js";
+import { dbInstance } from "./db/sqlite.js";
 
 dotenv.config();
 
@@ -178,11 +179,34 @@ const fiTopRoute = createRoute({
     tags: ["Foreign/Institution"],
     summary: "외국인/기관 매매 상위 10 종목",
     description:
-        "외국인 순매수/순매도 상위 10개 종목을 조회합니다. 장마감 전에는 가집계, 이후에는 실제 매매량 보정 데이터를 반환합니다.",
+        "외국인 순매수/순매도 상위 10개 종목을 조회합니다. 장마감 전에는 가집계, 이후에는 실제 매매량 보정 데이터를 반환합니다. KIS API 호출 실패 시 DB의 최신 데이터가 반환됩니다.",
     responses: {
         200: {
             content: { "application/json": { schema: FiTopResponseSchema } },
-            description: "상위 종목 조회 성공",
+            description: "상위 종목 조회 성공 (DB Fallback 포함)",
+        },
+        500: {
+            content: { "application/json": { schema: ErrorSchema } },
+            description: "API 및 DB 모두 조회 실패",
+        },
+    },
+});
+
+const fiTopDbRoute = createRoute({
+    method: "get",
+    path: "/api/fitop-db",
+    tags: ["Foreign/Institution"],
+    summary: "DB에 외국인/기관 매매 상위 10 종목 강제 적재",
+    description:
+        "KIS API에서 최신 데이터를 가져와 강제로 DB에 적재한 후 반환합니다.",
+    responses: {
+        200: {
+            content: { "application/json": { schema: FiTopResponseSchema } },
+            description: "저장 및 조회 성공",
+        },
+        500: {
+            content: { "application/json": { schema: ErrorSchema } },
+            description: "API 에러",
         },
     },
 });
@@ -274,8 +298,45 @@ app.openapi(chartRoute, async (c) => {
 });
 
 app.openapi(fiTopRoute, async (c) => {
-    const result = await getForeignInstitutionTop10(kisClient);
-    return c.json(result, 200);
+    try {
+        const result = await getForeignInstitutionTop10(kisClient);
+
+        // 데이터가 유효한 경우 안전하게 DB 저장
+        if (result && result.date) {
+            dbInstance.saveFiTop(result.date, result.buyTop, result.sellTop);
+        }
+
+        return c.json(result, 200);
+    } catch (e) {
+        console.error("Failed to fetch FiTop from KIS. Fallbacking to DB:", e);
+        const latestInfo = dbInstance.getLatestFiTop();
+        if (latestInfo) {
+            return c.json(latestInfo, 200);
+        }
+        return c.json(
+            { error: "Failed to fetch from API and no cache available" },
+            500,
+        );
+    }
+});
+
+app.openapi(fiTopDbRoute, async (c) => {
+    try {
+        const result = await getForeignInstitutionTop10(kisClient);
+
+        if (result && result.date) {
+            dbInstance.saveFiTop(result.date, result.buyTop, result.sellTop);
+        }
+
+        const latestInfo = dbInstance.getFiTop(result.date) || result;
+        return c.json(latestInfo, 200);
+    } catch (e) {
+        console.error("Failed to update FiTop DB:", e);
+        return c.json(
+            { error: "Failed to update internal DB from KIS API" },
+            500,
+        );
+    }
 });
 
 app.openapi(newsRoute, async (c) => {

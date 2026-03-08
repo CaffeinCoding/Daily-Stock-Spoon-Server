@@ -31,7 +31,13 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
         - 장마감 후
             - 국내기관 외국인 매매종목가집계로 순매수 상위 종목 10개와 순매도 상위 종목 10개를 수집
             - 수집한 종목들과 종목별 투자자매매동향을 활용해 당일 실제 종목별 순매수량과 순매도량을 수집.
-            - 수집한 자료들을 정리하여 return
+            - 성공 시 결괏값을 최신 DB(`node:sqlite`)에 저장
+        - Fallback (에러 시)
+            - API 호출 실패 시 SQLite DB에 캐시된 가장 최근 목록을 불러와 반환
+- getForeignInstitutionTop10 DB 수동 적재 (`/api/fitop-db`)
+    - input: 없음
+    - output: DB에 적재된 최신 상위 종목 데이터
+    - logic: KIS API에서 최신 매매동향 데이터를 가져와 무조건 DB에 덮어쓰기 형태로 저장
 - getStockNews: 주식 종목의 최신 뉴스 데이터를 return
     - input: 종목 코드
     - --len: 뉴스 기간 (당일 기준, 1d, 1w, 1m)
@@ -83,6 +89,8 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
 │   │   └── googleNews
 │   │       ├── index.ts          # Google News RSS 클라이언트
 │   │       └── googleNews.test.ts
+│   ├── db
+│   │   └── sqlite.ts             # 내장 SQLite(node:sqlite) 활용 DB 제어 로직
 │   ├── utils
 │   │   ├── getStockChart.ts
 │   │   ├── getForeignInstitutionTop10.ts
@@ -161,6 +169,10 @@ Daily Stock Spoon 서비스에서 사용하기 위한 유틸리티 서버
             ],
             date: string
         }
+- /api/fitop-db
+    - GET
+    - 설명: 수동 또는 스케줄링 용도로 최신 데이터를 강제로 DB에 적재 후 반환
+    - response: `/api/fitop`의 응답 구조와 동일
 - /api/news
     - POST
     - body: { stockCode: string, len: string}

@@ -9,11 +9,17 @@ const {
     mockGetForeignInstitutionTotal,
     mockGetInvestorTradeDaily,
     mockNewsSearch,
+    mockSaveFiTop,
+    mockGetFiTop,
+    mockGetLatestFiTop,
 } = vi.hoisted(() => ({
     mockGetDailyChart: vi.fn(),
     mockGetForeignInstitutionTotal: vi.fn(),
     mockGetInvestorTradeDaily: vi.fn(),
     mockNewsSearch: vi.fn(),
+    mockSaveFiTop: vi.fn(),
+    mockGetFiTop: vi.fn(),
+    mockGetLatestFiTop: vi.fn(),
 }));
 
 // ── 모든 외부 의존성 mock ─────────────────
@@ -25,6 +31,14 @@ vi.mock("./api/kis/index.js", () => ({
         getForeignInstitutionTotal: mockGetForeignInstitutionTotal,
         getInvestorTradeDaily: mockGetInvestorTradeDaily,
     })),
+}));
+
+vi.mock("./db/sqlite.js", () => ({
+    dbInstance: {
+        saveFiTop: mockSaveFiTop,
+        getFiTop: mockGetFiTop,
+        getLatestFiTop: mockGetLatestFiTop,
+    },
 }));
 
 vi.mock("./api/googleNews/index.js", () => ({
@@ -140,6 +154,58 @@ describe("API Server Routes", () => {
             expect(data.buyTop).toHaveLength(1);
             expect(data.sellTop).toHaveLength(1);
             expect(data.date).toBeDefined();
+            expect(mockSaveFiTop).toHaveBeenCalled();
+        });
+
+        it("KIS API 실패 시 DB Cache에서 반환해야 한다", async () => {
+            mockGetForeignInstitutionTotal.mockRejectedValueOnce(
+                new Error("API Error"),
+            );
+            mockGetLatestFiTop.mockReturnValueOnce({
+                buyTop: [
+                    { stockCode: "000000", stockName: "캐시종목", volume: 100 },
+                ],
+                sellTop: [],
+                date: "20240101",
+            });
+
+            const res = await app.request("/api/fitop");
+            expect(res.status).toBe(200);
+            const data = await res.json();
+            expect(data.buyTop[0].stockName).toBe("캐시종목");
+        });
+
+        it("KIS API 실패 & DB Cache 없을 시 500을 반환해야 한다", async () => {
+            mockGetForeignInstitutionTotal.mockRejectedValueOnce(
+                new Error("API Error"),
+            );
+            mockGetLatestFiTop.mockReturnValueOnce(null);
+
+            const res = await app.request("/api/fitop");
+            expect(res.status).toBe(500);
+        });
+    });
+
+    describe("GET /api/fitop-db", () => {
+        it("KIS API 데이터를 DB에 강제 적재하고 반환해야 한다", async () => {
+            mockGetForeignInstitutionTotal.mockResolvedValueOnce({
+                rt_cd: "0",
+                output: [
+                    {
+                        hts_kor_isnm: "삼성전자",
+                        mksc_shrn_iscd: "005930",
+                        ntby_qty: "500000",
+                    },
+                ],
+            });
+            mockGetForeignInstitutionTotal.mockResolvedValueOnce({
+                rt_cd: "0",
+                output: [],
+            });
+
+            const res = await app.request("/api/fitop-db");
+            expect(res.status).toBe(200);
+            expect(mockSaveFiTop).toHaveBeenCalled();
         });
     });
 
