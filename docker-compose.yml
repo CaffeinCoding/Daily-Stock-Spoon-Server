@@ -10,3 +10,10 @@ services:
         volumes:
             - ./db:/app/db
         restart: unless-stopped
+        networks:
+            - local-net
+
+networks:
+    local-net:
+        name: n8n-local-net
+        external: true
