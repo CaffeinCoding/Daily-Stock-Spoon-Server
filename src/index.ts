@@ -301,6 +301,14 @@ app.openapi(fiTopRoute, async (c) => {
     try {
         const result = await getForeignInstitutionTop10(kisClient);
 
+        if (
+            result &&
+            result.buyTop.length === 0 &&
+            result.sellTop.length === 0
+        ) {
+            throw new Error("Empty array from KIS API");
+        }
+
         // 데이터가 유효한 경우 안전하게 DB 저장
         if (result && result.date) {
             dbInstance.saveFiTop(result.date, result.buyTop, result.sellTop);
@@ -323,6 +331,22 @@ app.openapi(fiTopRoute, async (c) => {
 app.openapi(fiTopDbRoute, async (c) => {
     try {
         const result = await getForeignInstitutionTop10(kisClient);
+
+        if (
+            result &&
+            result.buyTop.length === 0 &&
+            result.sellTop.length === 0
+        ) {
+            console.warn("Empty array from KIS API. Skipping DB update.");
+            const latestInfo = dbInstance.getLatestFiTop();
+            if (latestInfo) {
+                return c.json(latestInfo, 200);
+            }
+            return c.json(
+                { error: "Failed to fetch from API and no cache available" },
+                500,
+            );
+        }
 
         if (result && result.date) {
             dbInstance.saveFiTop(result.date, result.buyTop, result.sellTop);

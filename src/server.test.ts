@@ -157,6 +157,29 @@ describe("API Server Routes", () => {
             expect(mockSaveFiTop).toHaveBeenCalled();
         });
 
+        it("KIS API가 빈 배열 반환 시 DB Cache에서 반환해야 한다", async () => {
+            mockGetForeignInstitutionTotal.mockResolvedValueOnce({
+                rt_cd: "0",
+                output: [],
+            });
+            mockGetForeignInstitutionTotal.mockResolvedValueOnce({
+                rt_cd: "0",
+                output: [],
+            });
+            mockGetLatestFiTop.mockReturnValueOnce({
+                buyTop: [
+                    { stockCode: "000000", stockName: "캐시종목", volume: 100 },
+                ],
+                sellTop: [],
+                date: "20240101",
+            });
+
+            const res = await app.request("/api/fitop");
+            expect(res.status).toBe(200);
+            const data = await res.json();
+            expect(data.buyTop[0].stockName).toBe("캐시종목");
+        });
+
         it("KIS API 실패 시 DB Cache에서 반환해야 한다", async () => {
             mockGetForeignInstitutionTotal.mockRejectedValueOnce(
                 new Error("API Error"),
