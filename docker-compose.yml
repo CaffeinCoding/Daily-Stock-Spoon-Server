@@ -8,10 +8,13 @@ services:
         environment:
             - PORT=${PORT:-3000}
         volumes:
-            - ./db:/app/db
+            - db-data:/app/db
         restart: unless-stopped
         networks:
             - local-net
+
+volumes:
+    db-data:
 
 networks:
     local-net:
