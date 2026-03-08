@@ -1,5 +1,6 @@
 services:
     app:
+        container_name: daily-stock-spoon-server
         build: .
         ports:
             - "${PORT:-3000}:${PORT:-3000}"
