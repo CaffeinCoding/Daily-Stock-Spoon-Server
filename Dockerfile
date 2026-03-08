@@ -29,8 +29,8 @@ COPY --from=build /app/dist ./dist
 ENV PORT=3000
 EXPOSE ${PORT}
 
-# non-root 사용자로 전환
-USER appuser
+# 로컬 볼륨 마운트 권한 충돌을 피하기 위해 root 권한으로 실행되도록 주석 처리
+# USER appuser
 
 # 헬스체크
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
